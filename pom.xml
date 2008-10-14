@@ -22,8 +22,10 @@
   <modules>
     <module>authz-api/api</module>
     <module>authz-impl/impl</module>
+    <module>authz-impl/hbm</module>
     <module>authz-impl/integration-test</module>
     <module>authz-impl/pack</module>
     <module>authz-tool/tool</module>
+    <module>devolved-admin/tool</module>
   </modules>
 </project>

@@ -86,15 +86,32 @@
       <version>${sakai.version}</version>
     </dependency>
     <dependency>
-      <groupId>org.sakaiproject</groupId>
-      <artifactId>sakai-db-storage</artifactId>
-      <version>${sakai.version}</version>
+    	<groupId>org.sakaiproject</groupId>
+    	<artifactId>sakai-db-storage</artifactId>
+    	<version>${sakai.version}</version>
     </dependency>
     <dependency>
-      <groupId>commons-logging</groupId>
-      <artifactId>commons-logging</artifactId>
-      <version>1.0.4</version>
+    	<groupId>org.sakaiproject</groupId>
+    	<artifactId>sakai-authz-hbm</artifactId>
+    	<version>${sakai.version}</version>
     </dependency>
+    <dependency>
+    	<groupId>commons-logging</groupId>
+    	<artifactId>commons-logging</artifactId>
+    	<version>1.0.4</version>
+    </dependency>
+    
+    <dependency>
+    	<groupId>${sakai.hibernate.groupId}</groupId>
+    	<artifactId>${sakai.hibernate.artifactId}</artifactId>
+    	<version>${sakai.hibernate.version}</version>
+    </dependency>
+    <dependency>
+    	<groupId>${sakai.spring.groupId}</groupId>
+    	<artifactId>${sakai.spring.artifactId}</artifactId>
+    	<version>${sakai.spring.version}</version>
+    </dependency>
+
   </dependencies>
   <build>
     
