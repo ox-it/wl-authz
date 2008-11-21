@@ -67,8 +67,8 @@ public class SiteListProducer implements ViewComponentProducer, DefaultView {
 		List<Entity> sites = devolvedSakaiSecurity.findUsesOfAdmin(reference);
 		
 		for (Entity entity: sites) {
-			UIBranchContainer siteRow = UIBranchContainer.make(tofill, "siteList:", entity.getId());
 			if (entity instanceof Site) {
+				UIBranchContainer siteRow = UIBranchContainer.make(tofill, "siteList:", entity.getId());
 				Site site = (Site)entity;
 				ResourceProperties siteProperties = site.getProperties();
 				UILink.make(siteRow, "link", site.getTitle(), site.getUrl());

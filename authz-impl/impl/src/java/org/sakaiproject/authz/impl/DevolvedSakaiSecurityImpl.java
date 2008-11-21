@@ -173,7 +173,10 @@ public abstract class DevolvedSakaiSecurityImpl extends SakaiSecurity implements
 		List <Entity> sites = new ArrayList<Entity>(devolvedAdmins.size());
 		for (DevolvedAdmin devolvedAdmin: devolvedAdmins)
 		{
-			sites.add(getSiteReference(devolvedAdmin.getRealm()).getEntity());
+			Entity entity = getSiteReference(devolvedAdmin.getRealm()).getEntity();
+			if (entity != null) {
+				sites.add(entity);
+			}
 		}
 		return sites;
 	}
