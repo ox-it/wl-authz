@@ -3,6 +3,8 @@ package org.sakaiproject.authz.impl;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
+import java.util.Observable;
+import java.util.Observer;
 
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.impl.LogFactoryImpl;
@@ -13,6 +15,7 @@ import org.sakaiproject.authz.impl.hbm.DevolvedAdmin;
 import org.sakaiproject.authz.impl.hbm.DevolvedAdminDao;
 import org.sakaiproject.entity.api.Entity;
 import org.sakaiproject.entity.api.Reference;
+import org.sakaiproject.event.api.Event;
 import org.sakaiproject.event.api.EventTrackingService;
 import org.sakaiproject.exception.PermissionException;
 import org.sakaiproject.memory.api.Cache;
@@ -39,6 +42,8 @@ public abstract class DevolvedSakaiSecurityImpl extends SakaiSecurity implements
 	private String adminSiteType;
 	
 	private Cache adminCache;
+
+	private Observer siteDeleteObserver;
 	
 	protected abstract EventTrackingService eventTrackingService();
 		
@@ -49,6 +54,25 @@ public abstract class DevolvedSakaiSecurityImpl extends SakaiSecurity implements
 		log.info("Admin site type set to: "+ adminSiteType);
 		
 		adminCache = memoryService().newCache(DevolvedSakaiSecurityImpl.class.getName(), SiteService.REFERENCE_ROOT);
+		
+		siteDeleteObserver = new Observer() {
+		
+			public void update(Observable o, Object arg) {
+				if (arg instanceof Event) {
+					Event event = (Event)arg;
+					if (SiteService.SECURE_REMOVE_SITE.equals(event.getEvent())) {
+						dao().delete(event.getResource());
+					}
+				}
+		
+			}
+		};
+		eventTrackingService().addLocalObserver(siteDeleteObserver);
+	}
+	
+	public void destroy() {
+		super.destroy();
+		eventTrackingService().deleteObserver(siteDeleteObserver);
 	}
 
 	/**
