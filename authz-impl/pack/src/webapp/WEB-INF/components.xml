@@ -101,4 +101,23 @@
 			singleton="true">
 	</bean>
 
+	<!--  Bean to create some content after component manager starts up but before Sakai is available. -->
+	<bean class="org.sakaiproject.authz.impl.DevolvedSakaiSecuritySetup">
+		<property name="siteId"><value>test-admin</value></property>
+		<property name="autoDDL"><value>${auto.ddl}</value></property>
+		<property name="siteService">
+			<ref bean="org.sakaiproject.site.api.SiteService"/>
+		</property>
+		<property name="usageSessionService">
+			<ref bean="org.sakaiproject.event.api.UsageSessionService"/>
+		</property>
+		<property name="securityService">
+			<ref bean="org.sakaiproject.authz.api.SecurityService"/>
+		</property>
+		<property name="sessionManager">
+			<ref bean="org.sakaiproject.tool.api.SessionManager"/>
+		</property>
+	</bean>
+
+
 </beans>

@@ -22,5 +22,6 @@
 	<classpathentry combineaccessrules="false" kind="src" path="/test-harness"/>
 	<classpathentry kind="var" path="M2_REPO/org/springframework/spring/2.0.6/spring-2.0.6.jar" sourcepath="/SPRING_HOME"/>
 	<classpathentry kind="var" path="M2_REPO/org/hibernate/hibernate/3.2.5.ga/hibernate-3.2.5.ga.jar"/>
+	<classpathentry combineaccessrules="false" kind="src" path="/tool-util"/>
 	<classpathentry kind="output" path="bin"/>
 </classpath>
