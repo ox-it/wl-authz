@@ -30,7 +30,6 @@ import org.sakaiproject.authz.api.AuthzPermissionException;
 import org.sakaiproject.authz.api.GroupAlreadyDefinedException;
 import org.sakaiproject.authz.api.GroupIdInvalidException;
 import org.sakaiproject.authz.api.GroupNotDefinedException;
-import org.sakaiproject.authz.api.GroupProvider;
 import org.sakaiproject.authz.api.Member;
 import org.sakaiproject.authz.api.Role;
 import org.sakaiproject.authz.api.RoleAlreadyDefinedException;
@@ -47,8 +46,6 @@ import org.sakaiproject.cheftool.api.MenuItem;
 import org.sakaiproject.cheftool.menu.MenuEntry;
 import org.sakaiproject.cheftool.menu.MenuImpl;
 import org.sakaiproject.component.cover.ComponentManager;
-import org.sakaiproject.coursemanagement.api.CourseManagementService;
-import org.sakaiproject.coursemanagement.api.exception.IdNotFoundException;
 import org.sakaiproject.event.api.SessionState;
 import org.sakaiproject.javax.PagingPosition;
 import org.sakaiproject.user.api.User;
@@ -67,10 +64,7 @@ public class RealmsAction extends PagedResourceActionII
 
 	/** Resource bundle using current language locale */
 	private static ResourceLoader rb = new ResourceLoader("authz-tool");
-	
-	private org.sakaiproject.coursemanagement.api.CourseManagementService cms = (org.sakaiproject.coursemanagement.api.CourseManagementService) ComponentManager
-	.get(org.sakaiproject.coursemanagement.api.CourseManagementService.class);
-	
+
 	private org.sakaiproject.authz.api.GroupProvider groupProvider = (org.sakaiproject.authz.api.GroupProvider) ComponentManager
 	.get(org.sakaiproject.authz.api.GroupProvider.class);
 
@@ -771,9 +765,11 @@ public class RealmsAction extends PagedResourceActionII
 			{
 				try
 				{
-					cms.getSection(providers[i]);
+					// If CMS is up then this will fallthrough and should throw an IdNotFoundException.
+					// If we just have a GroupProvider then who knows what will happen.
+					groupProvider.getUserRolesForGroup(providers[i]);
 				}
-				catch (IdNotFoundException e)
+				catch (RuntimeException re)
 				{
 					addAlert(state, rb.getString("realm.noProviderIdFound") + " " +  rb.getString("realm.edit.provider") + providers[i] + ". ");
 				}
