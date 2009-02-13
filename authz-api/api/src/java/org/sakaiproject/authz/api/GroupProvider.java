@@ -44,8 +44,8 @@ public interface GroupProvider
 	/**
 	 * Access the user id - role name map for all users in the external group.
 	 * 
-	 * @param id
-	 *        The external group id. This will need to be unpacked if the provider supports packing.
+	 * @param id The external group id. This will need to be unpacked if the provider supports packing.
+	 * This may be <code>null</code> if the context doesn't have a provider ID set. 
 	 * @return the user id - role name map for all users in the external group (may be empty).
 	 */
 	Map getUserRolesForGroup(String id);
