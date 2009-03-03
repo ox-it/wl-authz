@@ -72,8 +72,9 @@ public interface GroupProvider
 	 * Unpack a possibly compound id into it's component ids, returning at least the id unchanged if not compound.
 	 * 
 	 * @param id
-	 *        The external realm id.
-	 * @return a String array of one or more ids upacked from this possibly compound id.
+	 *        The external realm id. This may be <code>null</code>.
+	 * @return a String array of one or more ids upacked from this possibly compound id, if <code>null</code> was supplied 
+	 * return an empty array.
 	 */
 	String[] unpackId(String id);
 	
