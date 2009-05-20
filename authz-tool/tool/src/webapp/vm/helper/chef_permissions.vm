@@ -28,7 +28,7 @@
 						#set($roleAbilities = $rolesAbilities.get($role.Id))
 						<tr>
 							<td headers="role">
-								<h4 title="$role.Description">$role.Id</h4>
+								<h4 title="$role.Description">$thelp.getString("display.${role.Id}", $role.Id)</h4>
 							</td>
 						#foreach($lock in $abilities)
 							<td headers="$lock.substring($prefix.length())">
@@ -39,7 +39,7 @@
 										<img src="#imageLink("sakai/checkon.gif")" border="0" alt="$thelp.getString("per.alrgra")" hspace="5" />
 									#else
 										<label for="$role.Id$lock" class="skip">$role.Id$lock</label>
-										<input type="checkbox" name="$role.Id$lock" id="$role.Id$lock" value="$role.Id$lock" #if(($myRole) && ($myRole.Id==$role.Id) && ($myRole.AllowedFunctions.contains($lock)))checked="checked"#end />
+										<input type="checkbox" name="$role.Id$lock" id="$role.Id$lock" value="$role.Id$lock" #if(($myRole) && ($myRole.Id==$role.Id) && ($myRole.AllowedFunctions.contains($lock)))checked="checked"#end #if($allowed.containsKey($role.id) && !$allowed.get($role.id).contains($lock))disabled="true"#end />
 									#end
 								#end
 							</td>
