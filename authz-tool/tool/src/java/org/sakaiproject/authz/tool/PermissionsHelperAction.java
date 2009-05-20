@@ -25,6 +25,7 @@ import java.io.IOException;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Hashtable;
 import java.util.Iterator;
 import java.util.List;
@@ -47,11 +48,13 @@ import org.sakaiproject.authz.api.Role;
 import org.sakaiproject.authz.api.RoleAlreadyDefinedException;
 import org.sakaiproject.authz.cover.AuthzGroupService;
 import org.sakaiproject.authz.cover.FunctionManager;
+import org.sakaiproject.authz.cover.SecurityService;
 import org.sakaiproject.cheftool.Context;
 import org.sakaiproject.cheftool.JetspeedRunData;
 import org.sakaiproject.cheftool.RunData;
 import org.sakaiproject.cheftool.VelocityPortlet;
 import org.sakaiproject.cheftool.VelocityPortletPaneledAction;
+import org.sakaiproject.component.api.ServerConfigurationService;
 import org.sakaiproject.entity.api.Reference;
 import org.sakaiproject.entity.cover.EntityManager;
 import org.sakaiproject.event.api.SessionState;
@@ -227,7 +230,7 @@ public class PermissionsHelperAction extends VelocityPortletPaneledAction
 	 * 
 	 * @return The name of the template to use.
 	 */
-	static public String buildHelperContext(VelocityPortlet portlet, Context context, RunData rundata, SessionState state)
+	public String buildHelperContext(VelocityPortlet portlet, Context context, RunData rundata, SessionState state)
 	{
 		// in state is the realm id
 		context.put("thelp", rb);
@@ -452,7 +455,9 @@ public class PermissionsHelperAction extends VelocityPortletPaneledAction
 				rolesAbilities.put(role.getId(), locks);
 			}
 		}
-
+		Map allowedPermissions = getAllowedPermissions();
+		
+		context.put("allowed", allowedPermissions);
 		context.put("realm", viewEdit != null ? viewEdit : edit);
 		context.put("prefix", prefix);
 		context.put("description", description);
@@ -467,6 +472,54 @@ public class PermissionsHelperAction extends VelocityPortletPaneledAction
 
 		return TEMPLATE_MAIN;
 	}
+
+	/**
+	 * Find the allowed permissions (by role) for the current user.
+	 * If there aren't any permissions list all are allowed.
+	 */
+	private Map<String, Set<String>> getAllowedPermissions()
+	{
+		if (SecurityService.isSuperUser())
+		{
+			return Collections.EMPTY_MAP;
+		}
+		else
+		{
+			Map<String, Set<String>> roleMap = new HashMap<String, Set<String>>();
+			ServerConfigurationService scs = org.sakaiproject.component.cover.ServerConfigurationService.getInstance();
+			String roleList = scs.getString("realm.allowed.roles", "");
+			Set<String> defaultPermissionSet = createPermissionSet("default");
+			for (String roleName :roleList.split(","))
+			{
+				roleName = roleName.trim();
+				if (roleName.length() == 0)
+				{
+					continue;
+				}
+				Set<String> permissionSet = createPermissionSet(roleName);
+				roleMap.put(roleName, (permissionSet.size() > 0)?permissionSet:defaultPermissionSet);
+				
+			}
+			return roleMap;
+		}
+	}
+	
+	private Set<String> createPermissionSet(String roleName)
+	{
+		String permissionList = org.sakaiproject.component.cover.ServerConfigurationService.getString("realm.allowed."+roleName,"");
+		Set<String> permissionSet = new HashSet<String>();
+		for (String permissionName : permissionList.split(","))
+		{
+			permissionName = permissionName.trim();
+			if (permissionName.length() > 0)
+			{
+				permissionSet.add(permissionName);
+			}
+		}
+		return permissionSet;
+	}
+
+
 	/**
 	 * Remove the state variables used internally, on the way out.
 	 */
@@ -563,15 +616,23 @@ public class PermissionsHelperAction extends VelocityPortletPaneledAction
 		List abilities = (List) state.getAttribute(STATE_ABILITIES);
 		List roles = (List) state.getAttribute(STATE_ROLES);
 
+		Map<String, Set<String>> allowedRoles = getAllowedPermissions();
 		// look for each role's ability field
 		for (Iterator iRoles = roles.iterator(); iRoles.hasNext();)
 		{
 			Role role = (Role) iRoles.next();
+			Set<String> allowedPermissions = allowedRoles.get(role.getId());
+
 
 			for (Iterator iLocks = abilities.iterator(); iLocks.hasNext();)
 			{
 				String lock = (String) iLocks.next();
-
+				// Don't alow changes to some permissions.
+				if (allowedPermissions != null && !allowedPermissions.contains(lock))
+				{
+				    M_log.debug("Can't change permission '"+ lock+ "' on role '"+role.getId()+ "'.");
+				    continue;
+				}
 				String checked = data.getParameters().getString(role.getId() + lock);
 				if (checked != null)
 				{
