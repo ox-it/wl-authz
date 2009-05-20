@@ -28,7 +28,7 @@
 						#set($roleAbilities = $rolesAbilities.get($role.Id))
 						<tr>
 							<td headers="role">
-								<h4>$role.Id</h4>
+								<h4 title="$role.Description">$role.Id</h4>
 							</td>
 						#foreach($lock in $abilities)
 							<td headers="$lock.substring($prefix.length())">
