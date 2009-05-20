@@ -87,6 +87,11 @@
       <artifactId>sakai-component</artifactId>
       <version>${sakai.version}</version>
     </dependency>
+    <dependency>
+      <groupId>org.sakaiproject</groupId>
+      <artifactId>sakai-component-api</artifactId>
+      <version>${sakai.version}</version>
+    </dependency>
 <!-- velocity and dependencies (logkit, oro, collections) -->
     <dependency>
       <groupId>velocity</groupId>
