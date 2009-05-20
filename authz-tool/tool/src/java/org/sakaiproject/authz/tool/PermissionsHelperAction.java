@@ -9,7 +9,7 @@
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *       http://www.opensource.org/licenses/ECL-2.0
+ *       http://www.osedu.org/licenses/ECL-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -24,6 +24,8 @@ package org.sakaiproject.authz.tool;
 import java.io.IOException;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Hashtable;
 import java.util.Iterator;
 import java.util.List;
@@ -109,6 +111,9 @@ public class PermissionsHelperAction extends VelocityPortletPaneledAction
 	/** State attribute for permission description */
 	public static final String STATE_PERMISSION_DESCRIPTIONS = "permission.descriptions";
 
+	/** the prefix to permission title for permission description entry in bundle file */
+	public static final String PREFIX_PERMISSION_DESCRIPTION = "desc-";
+
 	/** Modes. */
 	public static final String MODE_MAIN = "main";
 
@@ -193,7 +198,6 @@ public class PermissionsHelperAction extends VelocityPortletPaneledAction
 		String targetRef = (String) toolSession.getAttribute(PermissionsHelper.TARGET_REF);
 		String description = (String) toolSession.getAttribute(PermissionsHelper.DESCRIPTION);
 		String rolesRef = (String) toolSession.getAttribute(PermissionsHelper.ROLES_REF);
-		
 		if (rolesRef == null) rolesRef = targetRef;
 
 		toolSession.setAttribute(STARTED, Boolean.valueOf(true));
@@ -211,7 +215,7 @@ public class PermissionsHelperAction extends VelocityPortletPaneledAction
 		state.setAttribute(STATE_PREFIX, prefix);
 
 		// ... set the ResourceLoader object
-		state.setAttribute(STATE_PERMISSION_DESCRIPTIONS, toolSession.getAttribute(PermissionsHelper.PERMISSION_DESCRIPTION));
+		state.setAttribute(STATE_PERMISSION_DESCRIPTIONS, toolSession.getAttribute("permissionDescriptions"));
 		
 		// start the helper
 		state.setAttribute(STATE_MODE, MODE_MAIN);
@@ -383,14 +387,14 @@ public class PermissionsHelperAction extends VelocityPortletPaneledAction
 			
 			// get function description from passed in HashMap
 			// output permission descriptions
-			Map<String, String> functionDescriptions = (Map<String, String>) state.getAttribute(STATE_PERMISSION_DESCRIPTIONS);
+			HashMap<String, String> functionDescriptions = (HashMap<String, String>) state.getAttribute(STATE_PERMISSION_DESCRIPTIONS);
 			if (functionDescriptions != null)
 			{
 				Set keySet = functionDescriptions.keySet();
 				for(Object function : functions)
 				{
 					String desc = (String) function;
-					String descKey = PermissionsHelper.PREFIX_PERMISSION_DESCRIPTION + function;
+					String descKey = PREFIX_PERMISSION_DESCRIPTION + function;
 					if (keySet.contains(descKey))
 					{
 						// use function description
@@ -449,8 +453,10 @@ public class PermissionsHelperAction extends VelocityPortletPaneledAction
 				rolesAbilities.put(role.getId(), locks);
 			}
 		}
+		Map allowedPermissions = getAllowedPermissions();
 		
-
+		context.put("roleName", new RoleNameLookup());
+		context.put("allowed", allowedPermissions);
 		context.put("realm", viewEdit != null ? viewEdit : edit);
 		context.put("prefix", prefix);
 		context.put("description", description);
@@ -511,11 +517,6 @@ public class PermissionsHelperAction extends VelocityPortletPaneledAction
 	{
 		SessionState state = ((JetspeedRunData) data).getPortletSessionState(((JetspeedRunData) data).getJs_peid());
 
-		if (!"POST".equals(data.getRequest().getMethod())) {
-			M_log.warn("PermissionsAction.doSave: user did not submit with a POST! IP=" + data.getRequest().getRemoteAddr());
-			return;
-		}
-
 		// only save the view realm's roles
 		AuthzGroup edit = (AuthzGroup) state.getAttribute(STATE_VIEW_REALM_EDIT);
 		if (edit == null)
@@ -574,7 +575,12 @@ public class PermissionsHelperAction extends VelocityPortletPaneledAction
 			for (Iterator iLocks = abilities.iterator(); iLocks.hasNext();)
 			{
 				String lock = (String) iLocks.next();
-
+                // Don't allow changes to some permissions.
+                if (allowedPermissions != null && !allowedPermissions.contains(lock))
+                {
+                    M_log.debug("Can't change permission '"+ lock+ "' on role '"+role.getId()+ "'.");
+                    continue;
+                }
 				boolean checked = data.getParameters().getBoolean(role.getId() + lock);
 				if (checked)
 				{
@@ -605,6 +611,14 @@ public class PermissionsHelperAction extends VelocityPortletPaneledAction
 					}
 				}
 			}
+		}
+	}
+
+	public static class RoleNameLookup
+	{
+		public String getName(String roleId)
+		{
+			return AuthzGroupService.getRoleName(roleId);
 		}
 	}
 }
