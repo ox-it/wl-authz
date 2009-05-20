@@ -224,9 +224,9 @@ public class PermissionsAction
 				rolesAbilities.put(role.getId(), locks);
 			}
 		}
-		Map restrictedPermissions = getRestrictiedPermissions();
+		Map allowedPermissions = getAllowedPermissions();
 		
-		context.put("restricted", restrictedPermissions);
+		context.put("allowed", allowedPermissions);
 		context.put("realm", edit);
 		context.put("prefix", prefix);
 		context.put("abilities", functions);
@@ -247,9 +247,10 @@ public class PermissionsAction
 	}
 
 	/**
-	 * Find the restricted permissions (by role) for the current user.
+	 * Find the allowed permissions (by role) for the current user.
+	 * If there aren't any permissions list all are allowed.
 	 */
-	private static Map<String, Set<String>> getRestrictiedPermissions()
+	private static Map<String, Set<String>> getAllowedPermissions()
 	{
 		if (SecurityService.isSuperUser())
 		{
@@ -259,7 +260,7 @@ public class PermissionsAction
 		{
 			Map<String, Set<String>> roleMap = new HashMap<String, Set<String>>();
 			ServerConfigurationService scs = org.sakaiproject.component.cover.ServerConfigurationService.getInstance();
-			String roleList = scs.getString("realm.restricted.roles", "");
+			String roleList = scs.getString("realm.allowed.roles", "");
 			for (String roleName :roleList.split(","))
 			{
 				roleName = roleName.trim();
@@ -267,7 +268,7 @@ public class PermissionsAction
 				{
 					continue;
 				}
-				String permissionList = scs.getString("realm.restricted."+roleName,"");
+				String permissionList = scs.getString("realm.allowed."+roleName,"");
 				Set<String> permissionSet = new HashSet<String>();
 				for (String permissionName : permissionList.split(","))
 				{
@@ -351,23 +352,19 @@ public class PermissionsAction
 		List abilities = (List) state.getAttribute(STATE_ABILITIES);
 		List roles = (List) state.getAttribute(STATE_ROLES);
 		
-		Map<String, Set<String>> restrictedRoles = getRestrictiedPermissions();
+		Map<String, Set<String>> allowedRoles = getAllowedPermissions();
 
 		// look for each role's ability field
 		for (Iterator iRoles = roles.iterator(); iRoles.hasNext();)
 		{
 			Role role = (Role) iRoles.next();
-			Set<String> restrictedPermissions = restrictedRoles.get(role.getId());
-			if (restrictedPermissions == null)
-			{
-				restrictedPermissions = Collections.emptySet();
-			}
+			Set<String> allowedPermissions = allowedRoles.get(role.getId());
 
 			for (Iterator iLocks = abilities.iterator(); iLocks.hasNext();)
 			{
 				String lock = (String) iLocks.next();
 				// Don't alow changes to some permissions.
-				if (restrictedPermissions.contains(lock))
+				if (allowedPermissions != null && !allowedPermissions.contains(lock))
 				{
 					M_log.debug("Can't change permission '"+ lock+ "' on role '"+role.getId()+ "'.");
 					continue;
