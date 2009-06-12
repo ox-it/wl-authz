@@ -2,14 +2,15 @@ package org.sakaiproject.authz.impl;
 
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Observable;
 import java.util.Observer;
+import java.util.Set;
 
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.impl.LogFactoryImpl;
 import org.sakaiproject.authz.api.DevolvedSakaiSecurity;
-import org.sakaiproject.authz.api.SecurityAdvisor;
 import org.sakaiproject.authz.cover.FunctionManager;
 import org.sakaiproject.authz.impl.hbm.DevolvedAdmin;
 import org.sakaiproject.authz.impl.hbm.DevolvedAdminDao;
@@ -73,48 +74,6 @@ public abstract class DevolvedSakaiSecurityImpl extends SakaiSecurity implements
 	public void destroy() {
 		super.destroy();
 		eventTrackingService().deleteObserver(siteDeleteObserver);
-	}
-
-	/**
-	 * At the moment all implementations to unlock() call this.
-	 */
-	public boolean unlock(String userId, String function, String entityRef, Collection authz) {
-		if (userId == null || function == null || entityRef == null) {
-			log.warn("unlock(): null: " + userId + " " + function + " "+ entityRef);
-			return false;
-		}
-		// if super, grant
-		if (isSuperUser(userId))
-		{
-			return true;
-		}
-		// let the advisors have a crack at it, if we have any
-		// Note: this cannot be cached without taking into consideration the
-		// exact advisor configuration -ggolden
-		if (hasAdvisors())
-		{
-			SecurityAdvisor.SecurityAdvice advice = adviseIsAllowed(userId, function, entityRef);
-			if (advice != SecurityAdvisor.SecurityAdvice.PASS)
-			{
-				return advice == SecurityAdvisor.SecurityAdvice.ALLOWED;
-			}
-		}
-
-		String adminRealm = getAdminRealm(entityRef);
-		if (adminRealm != null) {
-			if (log.isDebugEnabled()) {
-				log.debug("Checking for admin in realm: " + adminRealm);
-			}
-			if (authz == null) {
-				authz = entityManager().newReference(adminRealm).getAuthzGroups(userId);
-			}
-			authz = new ArrayList<String>(authz);
-			// Add the admin authzgroups
-			authz.addAll(entityManager().newReference(adminRealm).getAuthzGroups(userId));
-			// Add the original authzgroups
-			authz.addAll(entityManager().newReference(entityRef).getAuthzGroups(userId));
-		}
-		return checkAuthzGroups(userId, function, entityRef, authz);
 	}
 
 	/*
@@ -232,7 +191,46 @@ public abstract class DevolvedSakaiSecurityImpl extends SakaiSecurity implements
 		}
 		
 	}
-	
+
+
+	protected boolean checkAuthzGroups(String userId, String function, String entityRef, Collection azgs)
+	{
+		// check the cache
+		String command = "unlock@" + userId + "@" + function + "@" + entityRef;
+		if (m_callCache != null)
+		{
+			final Boolean value = (Boolean) m_callCache.get(command);
+			if(value != null) return value.booleanValue();
+		}
+
+		// get this entity's AuthzGroups if needed
+		if (azgs == null)
+		{
+			// make a reference for the entity
+			Reference ref = entityManager().newReference(entityRef);
+
+			azgs = ref.getAuthzGroups(userId);
+		}
+
+		Set<String> expandedAzgs = new HashSet<String>();
+		for (String ref: (Collection<String>)azgs) {
+			String adminRealm = getAdminRealm(ref);
+			if (adminRealm != null) {
+				if (log.isDebugEnabled()) {
+					log.debug("Adding admin realm: " + adminRealm + " for: " + ref);
+				}
+				expandedAzgs.add(adminRealm);
+			}
+			expandedAzgs.add(ref);
+		}
+
+		boolean rv = authzGroupService().isAllowed(userId, function, expandedAzgs);
+
+		// cache
+		if (m_callCache != null) m_callCache.put(command, Boolean.valueOf(rv), m_cacheMinutes * 60, entityRef, expandedAzgs);
+
+		return rv;
+	}
 
 	protected abstract SiteService siteService();
 
