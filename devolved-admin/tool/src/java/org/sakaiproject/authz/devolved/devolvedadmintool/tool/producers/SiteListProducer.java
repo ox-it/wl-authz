@@ -11,6 +11,8 @@
 
 package org.sakaiproject.authz.devolved.devolvedadmintool.tool.producers;
 
+import java.util.Collections;
+import java.util.Comparator;
 import java.util.List;
 
 import org.sakaiproject.authz.api.DevolvedSakaiSecurity;
@@ -37,11 +39,12 @@ public class SiteListProducer implements ViewComponentProducer, DefaultView {
 
 	// The VIEW_ID must match the html template (without the .html)
 	public static final String VIEW_ID = "default";
+	
 	public String getViewID() {
 		return VIEW_ID;
 	}
 	
-   private DevolvedSakaiSecurity devolvedSakaiSecurity;
+	private DevolvedSakaiSecurity devolvedSakaiSecurity;
 
 	public void setDevolvedSakaiSecurity(DevolvedSakaiSecurity devolvedSakaiSecurity) {
 		this.devolvedSakaiSecurity = devolvedSakaiSecurity;
@@ -58,6 +61,12 @@ public class SiteListProducer implements ViewComponentProducer, DefaultView {
 	public void setSiteService(SiteService siteService) {
 		this.siteService = siteService;
 	}
+	
+	private Comparator<Entity> siteComparator;
+	
+	public void setSiteComparator(Comparator<Entity> siteComparator) {
+		this.siteComparator = siteComparator;
+	}
 
 	public void fillComponents(UIContainer tofill, ViewParameters viewparams,
 			ComponentChecker checker) {
@@ -65,6 +74,9 @@ public class SiteListProducer implements ViewComponentProducer, DefaultView {
 		String siteId = toolManager.getCurrentPlacement().getContext();
 		String reference = siteService.siteReference(siteId);
 		List<Entity> sites = devolvedSakaiSecurity.findUsesOfAdmin(reference);
+		if (siteComparator != null) {
+			Collections.sort(sites, siteComparator);
+		}
 		
 		for (Entity entity: sites) {
 			if (entity instanceof Site) {
