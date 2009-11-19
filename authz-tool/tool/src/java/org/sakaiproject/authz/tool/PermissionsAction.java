@@ -55,8 +55,6 @@ import org.sakaiproject.entity.cover.EntityManager;
 import org.sakaiproject.event.api.SessionState;
 import org.sakaiproject.util.ResourceLoader;
 
-import sun.reflect.ReflectionFactory.GetReflectionFactoryAction;
-
 /**
  * <p>
  * PermissionsAction is a helper Action that other tools can use to edit their permissions.
@@ -226,6 +224,7 @@ public class PermissionsAction
 		}
 		Map allowedPermissions = getAllowedPermissions();
 		
+		context.put("roleName", new RoleNameLookup());
 		context.put("allowed", allowedPermissions);
 		context.put("realm", edit);
 		context.put("prefix", prefix);
@@ -399,6 +398,14 @@ public class PermissionsAction
 					}
 				}
 			}
+		}
+	}
+	
+	public static class RoleNameLookup
+	{
+		public String getName(String roleId)
+		{
+			return AuthzGroupService.getRoleName(roleId);
 		}
 	}
 }
