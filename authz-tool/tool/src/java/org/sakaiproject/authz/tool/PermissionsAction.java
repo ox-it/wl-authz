@@ -260,6 +260,7 @@ public class PermissionsAction
 			Map<String, Set<String>> roleMap = new HashMap<String, Set<String>>();
 			ServerConfigurationService scs = org.sakaiproject.component.cover.ServerConfigurationService.getInstance();
 			String roleList = scs.getString("realm.allowed.roles", "");
+			Set<String> defaultPermissionSet = createPermissionSet("default");
 			for (String roleName :roleList.split(","))
 			{
 				roleName = roleName.trim();
@@ -267,20 +268,27 @@ public class PermissionsAction
 				{
 					continue;
 				}
-				String permissionList = scs.getString("realm.allowed."+roleName,"");
-				Set<String> permissionSet = new HashSet<String>();
-				for (String permissionName : permissionList.split(","))
-				{
-					permissionName = permissionName.trim();
-					permissionSet.add(permissionName);
-				}
-				if (permissionSet.size() > 0)
-				{
-					roleMap.put(roleName, permissionSet);
-				}
+				Set<String> permissionSet = createPermissionSet(roleName);
+				roleMap.put(roleName, (permissionSet.size() > 0)?permissionSet:defaultPermissionSet);
+				
 			}
 			return roleMap;
 		}
+	}
+	
+	private static Set<String> createPermissionSet(String roleName)
+	{
+		String permissionList = org.sakaiproject.component.cover.ServerConfigurationService.getString("realm.allowed."+roleName,"");
+		Set<String> permissionSet = new HashSet<String>();
+		for (String permissionName : permissionList.split(","))
+		{
+			permissionName = permissionName.trim();
+			if (permissionName.length() > 0)
+			{
+				permissionSet.add(permissionName);
+			}
+		}
+		return permissionSet;
 	}
 
 	/**
