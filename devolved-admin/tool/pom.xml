@@ -17,11 +17,11 @@
    <parent>
       <groupId>org.sakaiproject</groupId>
       <artifactId>master</artifactId>
-      <version>2.6.0RC1-SNAPSHOT</version>
+      <version>2.6-SNAPSHOT</version>
    </parent>
 
    <properties>
-      <rsfutil.version>0.7.2</rsfutil.version>
+      <rsfutil.version>0.7.4</rsfutil.version>
       <sakairsf.sakai.version>2.2.x</sakairsf.sakai.version>
       <deploy.webappname>DevolvedAdminTool</deploy.webappname>
       <appserver.id>${sakai.appserver.id}</appserver.id>
