@@ -22,15 +22,41 @@
 package org.sakaiproject.authz.tool;
 
 import java.io.IOException;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Hashtable;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.Vector;
 
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 
+import org.apache.commons.logging.Log;
+import org.apache.commons.logging.LogFactory;
+import org.sakaiproject.authz.api.AuthzGroup;
+import org.sakaiproject.authz.api.AuthzPermissionException;
+import org.sakaiproject.authz.api.GroupAlreadyDefinedException;
+import org.sakaiproject.authz.api.GroupIdInvalidException;
+import org.sakaiproject.authz.api.GroupNotDefinedException;
 import org.sakaiproject.authz.api.PermissionsHelper;
+import org.sakaiproject.authz.api.Role;
+import org.sakaiproject.authz.api.RoleAlreadyDefinedException;
+import org.sakaiproject.authz.cover.AuthzGroupService;
+import org.sakaiproject.authz.cover.FunctionManager;
+import org.sakaiproject.authz.cover.SecurityService;
 import org.sakaiproject.cheftool.Context;
+import org.sakaiproject.cheftool.JetspeedRunData;
 import org.sakaiproject.cheftool.RunData;
 import org.sakaiproject.cheftool.VelocityPortlet;
 import org.sakaiproject.cheftool.VelocityPortletPaneledAction;
+import org.sakaiproject.component.api.ServerConfigurationService;
+import org.sakaiproject.entity.api.Reference;
+import org.sakaiproject.entity.cover.EntityManager;
 import org.sakaiproject.event.api.SessionState;
 import org.sakaiproject.util.ResourceLoader;
 import org.sakaiproject.tool.api.Tool;
@@ -44,9 +70,45 @@ import org.sakaiproject.tool.cover.ToolManager;
  */
 public class PermissionsHelperAction extends VelocityPortletPaneledAction
 {
+	/** Our logger. */
+	private static Log M_log = LogFactory.getLog(PermissionsHelperAction.class);
+
 	private static ResourceLoader rb = new ResourceLoader("authz-tool");
 
 	private static final String STARTED = "sakaiproject.permissions.started";
+
+	/** State attributes for Permissions mode - when it is MODE_DONE the tool can process the results. */
+	public static final String STATE_MODE = "pemissions.mode";
+
+	/** State attribute for the realm id - users should set before starting. */
+	public static final String STATE_REALM_ID = "permission.realmId";
+
+	/** State attribute for the realm id - users should set before starting. */
+	public static final String STATE_REALM_ROLES_ID = "permission.realmRolesId";
+
+	/** State attribute for the description of what's being edited - users should set before starting. */
+	public static final String STATE_DESCRIPTION = "permission.description";
+
+	/** State attribute for the lock/ability string prefix to be presented / edited - users should set before starting. */
+	public static final String STATE_PREFIX = "permission.prefix";
+
+	/** State attributes for storing the realm being edited. */
+	private static final String STATE_REALM_EDIT = "permission.realm";
+
+	/** State attributes for storing the abilities, filtered by the prefix. */
+	private static final String STATE_ABILITIES = "permission.abilities";
+
+	/** State attribute for storing the roles to display. */
+	private static final String STATE_ROLES = "permission.roles";
+
+	/** State attribute for storing the abilities of each role for this resource. */
+	private static final String STATE_ROLE_ABILITIES = "permission.rolesAbilities";
+
+	/** Modes. */
+	public static final String MODE_MAIN = "main";
+
+	/** vm files for each mode. TODO: path too hard coded */
+	private static final String TEMPLATE_MAIN = "helper/chef_permissions";
 
 	protected void toolModeDispatch(String methodBase, String methodExt, HttpServletRequest req, HttpServletResponse res)
 			throws ToolException
@@ -54,7 +116,7 @@ public class PermissionsHelperAction extends VelocityPortletPaneledAction
 		SessionState sstate = getState(req);
 		ToolSession toolSession = SessionManager.getCurrentToolSession();
 
-		String mode = (String) sstate.getAttribute(PermissionsAction.STATE_MODE);
+		String mode = (String) sstate.getAttribute(STATE_MODE);
 		Object started = toolSession.getAttribute(STARTED);
 
 		if (mode == null && started != null)
@@ -96,14 +158,14 @@ public class PermissionsHelperAction extends VelocityPortletPaneledAction
 	 */
 	public String buildMainPanelContext(VelocityPortlet portlet, Context context, RunData rundata, SessionState sstate)
 	{
-		String mode = (String) sstate.getAttribute(PermissionsAction.STATE_MODE);
+		String mode = (String) sstate.getAttribute(STATE_MODE);
 
 		if (mode == null)
 		{
 			initHelper(portlet, context, rundata, sstate);
 		}
 
-		String template = PermissionsAction.buildHelperContext(portlet, context, rundata, sstate);
+		String template = buildHelperContext(portlet, context, rundata, sstate);
 		if (template == null)
 		{
 			addAlert(sstate, rb.getString("java.alert.prbset"));
@@ -129,18 +191,331 @@ public class PermissionsHelperAction extends VelocityPortletPaneledAction
 		toolSession.setAttribute(STARTED, Boolean.valueOf(true));
 
 		// setup for editing the permissions of the site for this tool, using the roles of this site, too
-		state.setAttribute(PermissionsAction.STATE_REALM_ID, targetRef);
+		state.setAttribute(STATE_REALM_ID, targetRef);
 		
 		// use the roles from this ref's AuthzGroup
-		state.setAttribute(PermissionsAction.STATE_REALM_ROLES_ID, rolesRef);
+		state.setAttribute(STATE_REALM_ROLES_ID, rolesRef);
 
 		// ... with this description
-		state.setAttribute(PermissionsAction.STATE_DESCRIPTION, description);
+		state.setAttribute(STATE_DESCRIPTION, description);
 
 		// ... showing only locks that are prpefixed with this
-		state.setAttribute(PermissionsAction.STATE_PREFIX, prefix);
+		state.setAttribute(STATE_PREFIX, prefix);
 
 		// start the helper
-		state.setAttribute(PermissionsAction.STATE_MODE, PermissionsAction.MODE_MAIN);
+		state.setAttribute(STATE_MODE, MODE_MAIN);
+	}
+
+	/**
+	 * build the context.
+	 * 
+	 * @return The name of the template to use.
+	 */
+	public String buildHelperContext(VelocityPortlet portlet, Context context, RunData rundata, SessionState state)
+	{
+		// in state is the realm id
+		context.put("thelp", rb);
+		String realmId = (String) state.getAttribute(STATE_REALM_ID);
+
+		// in state is the realm to use for roles - if not, use realmId
+		String realmRolesId = (String) state.getAttribute(STATE_REALM_ROLES_ID);
+
+		// get the realm locked for editing
+		AuthzGroup edit = (AuthzGroup) state.getAttribute(STATE_REALM_EDIT);
+		if (edit == null)
+		{
+			if (AuthzGroupService.allowUpdate(realmId))
+			{
+				try
+				{
+					edit = AuthzGroupService.getAuthzGroup(realmId);
+					state.setAttribute(STATE_REALM_EDIT, edit);
+				}
+				catch (GroupNotDefinedException e)
+				{
+					try
+					{
+						// we can create the realm
+						edit = AuthzGroupService.addAuthzGroup(realmId);
+						state.setAttribute(STATE_REALM_EDIT, edit);
+					}
+					catch (GroupIdInvalidException ee)
+					{
+						M_log.warn("PermissionsAction.buildHelperContext: addRealm: " + ee);
+						cleanupState(state);
+						return null;
+					}
+					catch (GroupAlreadyDefinedException ee)
+					{
+						M_log.warn("PermissionsAction.buildHelperContext: addRealm: " + ee);
+						cleanupState(state);
+						return null;
+					}
+					catch (AuthzPermissionException ee)
+					{
+						M_log.warn("PermissionsAction.buildHelperContext: addRealm: " + ee);
+						cleanupState(state);
+						return null;
+					}
+				}
+			}
+
+			// no permission
+			else
+			{
+				M_log.warn("PermissionsAction.buildHelperContext: no permission: " + realmId);
+				cleanupState(state);
+				return null;
+			}
+		}
+
+		// in state is the prefix for abilities to present
+		String prefix = (String) state.getAttribute(STATE_PREFIX);
+
+		// in state is the list of abilities we will present
+		List functions = (List) state.getAttribute(STATE_ABILITIES);
+		if (functions == null)
+		{
+			// get all functions prefixed with our prefix
+			functions = FunctionManager.getRegisteredFunctions(prefix);
+
+			state.setAttribute(STATE_ABILITIES, functions);
+		}
+
+		// in state is the description of the edit
+		String description = (String) state.getAttribute(STATE_DESCRIPTION);
+
+		// the list of roles
+		List roles = (List) state.getAttribute(STATE_ROLES);
+		if (roles == null)
+		{
+			// get the roles from the edit, unless another is specified
+			AuthzGroup roleRealm = edit;
+			if (realmRolesId != null)
+			{
+				try
+				{
+					roleRealm = AuthzGroupService.getAuthzGroup(realmRolesId);
+				}
+				catch (Exception e)
+				{
+					M_log.warn("PermissionsAction.buildHelperContext: getRolesRealm: " + realmRolesId + " : " + e);
+				}
+			}
+			roles = new Vector();
+			roles.addAll(roleRealm.getRoles());
+			Collections.sort(roles);
+			state.setAttribute(STATE_ROLES, roles);
+		}
+
+		// the abilities not including this realm for each role
+		Map rolesAbilities = (Map) state.getAttribute(STATE_ROLE_ABILITIES);
+		if (rolesAbilities == null)
+		{
+			rolesAbilities = new Hashtable();
+			state.setAttribute(STATE_ROLE_ABILITIES, rolesAbilities);
+
+			// get this resource's role Realms,those that refine the role definitions, but not it's own
+			Reference ref = EntityManager.newReference(edit.getId());
+			Collection realms = ref.getAuthzGroups();
+			realms.remove(ref.getReference());
+
+			for (Iterator iRoles = roles.iterator(); iRoles.hasNext();)
+			{
+				Role role = (Role) iRoles.next();
+				Set locks = AuthzGroupService.getAllowedFunctions(role.getId(), realms);
+				rolesAbilities.put(role.getId(), locks);
+			}
+		}
+		Map allowedPermissions = getAllowedPermissions();
+		
+		context.put("roleName", new RoleNameLookup());
+		context.put("allowed", allowedPermissions);
+		context.put("realm", edit);
+		context.put("prefix", prefix);
+		context.put("abilities", functions);
+		context.put("description", description);
+		if (roles.size() > 0)
+		{
+			context.put("roles", roles);
+		}
+		context.put("rolesAbilities", rolesAbilities);
+
+		// make sure observers are disabled
+		VelocityPortletPaneledAction.disableObservers(state);
+
+		return TEMPLATE_MAIN;
+	}
+
+	/**
+	 * Find the allowed permissions (by role) for the current user.
+	 * If there aren't any permissions list all are allowed.
+	 */
+	private Map<String, Set<String>> getAllowedPermissions()
+	{
+		if (SecurityService.isSuperUser())
+		{
+			return Collections.EMPTY_MAP;
+		}
+		else
+		{
+			Map<String, Set<String>> roleMap = new HashMap<String, Set<String>>();
+			ServerConfigurationService scs = org.sakaiproject.component.cover.ServerConfigurationService.getInstance();
+			String roleList = scs.getString("realm.allowed.roles", "");
+			Set<String> defaultPermissionSet = createPermissionSet("default");
+			for (String roleName :roleList.split(","))
+			{
+				roleName = roleName.trim();
+				if (roleName.length() == 0)
+				{
+					continue;
+				}
+				Set<String> permissionSet = createPermissionSet(roleName);
+				roleMap.put(roleName, (permissionSet.size() > 0)?permissionSet:defaultPermissionSet);
+				
+			}
+			return roleMap;
+		}
+	}
+	
+	private Set<String> createPermissionSet(String roleName)
+	{
+		String permissionList = org.sakaiproject.component.cover.ServerConfigurationService.getString("realm.allowed."+roleName,"");
+		Set<String> permissionSet = new HashSet<String>();
+		for (String permissionName : permissionList.split(","))
+		{
+			permissionName = permissionName.trim();
+			if (permissionName.length() > 0)
+			{
+				permissionSet.add(permissionName);
+			}
+		}
+		return permissionSet;
+	}
+
+	/**
+	 * Remove the state variables used internally, on the way out.
+	 */
+	private void cleanupState(SessionState state)
+	{
+		state.removeAttribute(STATE_REALM_ID);
+		state.removeAttribute(STATE_REALM_EDIT);
+		state.removeAttribute(STATE_PREFIX);
+		state.removeAttribute(STATE_ABILITIES);
+		state.removeAttribute(STATE_DESCRIPTION);
+		state.removeAttribute(STATE_ROLES);
+		state.removeAttribute(STATE_ROLE_ABILITIES);
+		state.removeAttribute(STATE_MODE);
+		state.removeAttribute(VelocityPortletPaneledAction.STATE_HELPER);
+
+		// re-enable observers
+		VelocityPortletPaneledAction.enableObservers(state);
+	}
+
+	/**
+	 * Handle the eventSubmit_doSave command to save the edited permissions.
+	 */
+	public void doSave(RunData data)
+	{
+		SessionState state = ((JetspeedRunData) data).getPortletSessionState(((JetspeedRunData) data).getJs_peid());
+
+		AuthzGroup edit = (AuthzGroup) state.getAttribute(STATE_REALM_EDIT);
+
+		// read the form, updating the edit
+		readForm(data, edit, state);
+
+		// commit the change
+		try
+		{
+			AuthzGroupService.save(edit);
+		}
+		catch (GroupNotDefinedException e)
+		{
+			// TODO: GroupNotDefinedException
+		}
+		catch (AuthzPermissionException e)
+		{
+			// TODO: AuthzPermissionException
+		}
+
+		// clean up state
+		cleanupState(state);
+	}
+
+	/**
+	 * Handle the eventSubmit_doCancel command to abort the edits.
+	 */
+	public void doCancel(RunData data)
+	{
+		SessionState state = ((JetspeedRunData) data).getPortletSessionState(((JetspeedRunData) data).getJs_peid());
+
+		// clean up state
+		cleanupState(state);
+	}
+
+	/**
+	 * Read the permissions form.
+	 */
+	private void readForm(RunData data, AuthzGroup edit, SessionState state)
+	{
+		List abilities = (List) state.getAttribute(STATE_ABILITIES);
+		List roles = (List) state.getAttribute(STATE_ROLES);
+		
+		Map<String, Set<String>> allowedRoles = getAllowedPermissions();
+
+		// look for each role's ability field
+		for (Iterator iRoles = roles.iterator(); iRoles.hasNext();)
+		{
+			Role role = (Role) iRoles.next();
+			Set<String> allowedPermissions = allowedRoles.get(role.getId());
+
+			for (Iterator iLocks = abilities.iterator(); iLocks.hasNext();)
+			{
+				String lock = (String) iLocks.next();
+				// Don't alow changes to some permissions.
+				if (allowedPermissions != null && !allowedPermissions.contains(lock))
+				{
+					M_log.debug("Can't change permission '"+ lock+ "' on role '"+role.getId()+ "'.");
+					continue;
+				}
+				String checked = data.getParameters().getString(role.getId() + lock);
+				if (checked != null)
+				{
+					// we have an ability! Make sure there's a role
+					Role myRole = edit.getRole(role.getId());
+					if (myRole == null)
+					{
+						try
+						{
+							myRole = edit.addRole(role.getId());
+						}
+						catch (RoleAlreadyDefinedException e)
+						{
+							M_log.warn("PermissionsAction.readForm: addRole after getRole null: " + role.getId() + " : " + e);
+						}
+					}
+					if (myRole != null) {
+						myRole.allowFunction(lock);
+					}
+				}
+				else
+				{
+					// if we do have this role, make sure there's not this lock
+					Role myRole = edit.getRole(role.getId());
+					if (myRole != null)
+					{
+						myRole.disallowFunction(lock);
+					}
+				}
+			}
+		}
+	}
+	
+	public static class RoleNameLookup
+	{
+		public String getName(String roleId)
+		{
+			return AuthzGroupService.getRoleName(roleId);
+		}
 	}
 }
