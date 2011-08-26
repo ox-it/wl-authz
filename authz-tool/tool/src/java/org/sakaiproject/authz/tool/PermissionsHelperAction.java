@@ -457,6 +457,7 @@ public class PermissionsHelperAction extends VelocityPortletPaneledAction
 		}
 		Map allowedPermissions = getAllowedPermissions();
 		
+		context.put("roleName", new RoleNameLookup());
 		context.put("allowed", allowedPermissions);
 		context.put("realm", viewEdit != null ? viewEdit : edit);
 		context.put("prefix", prefix);
@@ -663,6 +664,14 @@ public class PermissionsHelperAction extends VelocityPortletPaneledAction
 					}
 				}
 			}
+		}
+	}
+
+	public static class RoleNameLookup
+	{
+		public String getName(String roleId)
+		{
+			return AuthzGroupService.getRoleName(roleId);
 		}
 	}
 }
