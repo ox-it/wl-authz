@@ -38,14 +38,7 @@ import javax.servlet.http.HttpServletResponse;
 
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
-import org.sakaiproject.authz.api.AuthzGroup;
-import org.sakaiproject.authz.api.AuthzPermissionException;
-import org.sakaiproject.authz.api.GroupAlreadyDefinedException;
-import org.sakaiproject.authz.api.GroupIdInvalidException;
-import org.sakaiproject.authz.api.GroupNotDefinedException;
-import org.sakaiproject.authz.api.PermissionsHelper;
-import org.sakaiproject.authz.api.Role;
-import org.sakaiproject.authz.api.RoleAlreadyDefinedException;
+import org.sakaiproject.authz.api.*;
 import org.sakaiproject.authz.cover.AuthzGroupService;
 import org.sakaiproject.authz.cover.FunctionManager;
 import org.sakaiproject.cheftool.Context;
@@ -521,11 +514,17 @@ public class PermissionsHelperAction extends VelocityPortletPaneledAction
 		{
 			// read the form, updating the edit
 			readForm(data, edit, state);
-	
+
 			// commit the change
 			try
 			{
-				AuthzGroupService.save(edit);
+				removeEmptyRoles(edit);
+
+				if (hasNothingSet(edit)) {
+					AuthzGroupService.removeAuthzGroup(edit);
+				} else {
+					AuthzGroupService.save(edit);
+				}
 			}
 			catch (GroupNotDefinedException e)
 			{
@@ -539,6 +538,18 @@ public class PermissionsHelperAction extends VelocityPortletPaneledAction
 
 		// clean up state
 		cleanupState(state);
+	}
+
+	private void removeEmptyRoles(AuthzGroup edit) {
+		for (Role role : edit.getRoles()) {
+			if(role.getAllowedFunctions().isEmpty()) {
+				edit.removeRole(role.getId());
+			}
+		}
+	}
+
+	private boolean hasNothingSet(AuthzGroup edit) {
+		return edit.getRoles().isEmpty() && edit.getMembers().isEmpty();
 	}
 
 	/**
