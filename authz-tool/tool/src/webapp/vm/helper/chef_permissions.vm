@@ -76,7 +76,7 @@
 						#foreach($role in $roles)
 						#set($myRole = $realm.getRole($role.Id))
 						#set($roleAbilities = $rolesAbilities.get($role.Id))
-						#set($roleCount=$roleCount + 1)		
+						#set($roleCount=$roleCount + 1)
 							<td class="$roleCount checkboxCell">
 								#if (($!hiddenLock.size()>0 && $!hiddenLock.indexOf($lock) != -1) || ($lock == "site.viewRoster" && !$!editViewRoster))
 									## don't show checkbox for those roles
@@ -85,8 +85,9 @@
 										<img src="#imageLink("sakai/checkon.gif")" border="0" alt="$thelp.getString("per.alrgra")" hspace="5" />
 									#else
 									<label for="$role.Id$lock"> <span class="skip">$thelp.getString("gen.enable") $role.Id: $desc</span>
-										<input class="$role.Id$lock" type="checkbox" name="$role.Id$lock" id="$role.Id$lock" value="$role.Id$lock" #if(($myRole) && ($myRole.Id==$role.Id) && ($myRole.AllowedFunctions.contains($lock)))checked="checked"#end  #if($allowed.containsKey($role.id) && !$allowed.get($role.id).contains($lock))disabled="true"#end />
-									</label>	
+										#set ($checked = ($myRole) && ($myRole.Id==$role.Id) && ($myRole.AllowedFunctions.contains($lock)))
+										<input class="$role.Id$lock" type="checkbox" name="$role.Id$lock" id="$role.Id$lock" value="$role.Id$lock" #if($checked)checked="checked"#end  #if(! $limiter.isEnabled($role.id, $lock, $checked))disabled="true"#end />
+									</label>
 									#end
 								#end
 							</td>
