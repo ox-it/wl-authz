@@ -441,10 +441,11 @@ public class PermissionsHelperAction extends VelocityPortletPaneledAction
 				rolesAbilities.put(role.getId(), locks);
 			}
 		}
-		Map allowedPermissions = getAllowedPermissions();
-		
+
+		PermissionLimiter limiter = getPermissionLimiter();
+
+		context.put("limiter", limiter);
 		context.put("roleName", new RoleNameLookup());
-		context.put("allowed", allowedPermissions);
 		context.put("realm", viewEdit != null ? viewEdit : edit);
 		context.put("prefix", prefix);
 		context.put("description", description);
@@ -461,39 +462,34 @@ public class PermissionsHelperAction extends VelocityPortletPaneledAction
 	}
 
 	/**
-	 * Find the allowed permissions (by role) for the current user.
+	 * Find a map of permissions based on a config prefix.
 	 * If there aren't any permissions list all are allowed.
+	 *
+	 * @param configPrefix The prefix to get permissions for.
 	 */
-	private Map<String, Set<String>> getAllowedPermissions()
+	private Map<String, Set<String>> getPermissions(String configPrefix)
 	{
-		if (SecurityService.isSuperUser())
+		Map<String, Set<String>> roleMap = new HashMap<String, Set<String>>();
+		ServerConfigurationService scs = org.sakaiproject.component.cover.ServerConfigurationService.getInstance();
+		String roleList = scs.getString(configPrefix+ "roles", "");
+		Set<String> defaultPermissionSet = createPermissionSet(configPrefix, "default");
+		for (String roleName :roleList.split(","))
 		{
-			return Collections.EMPTY_MAP;
-		}
-		else
-		{
-			Map<String, Set<String>> roleMap = new HashMap<String, Set<String>>();
-			ServerConfigurationService scs = org.sakaiproject.component.cover.ServerConfigurationService.getInstance();
-			String roleList = scs.getString("realm.allowed.roles", "");
-			Set<String> defaultPermissionSet = createPermissionSet("default");
-			for (String roleName :roleList.split(","))
+			roleName = roleName.trim();
+			if (roleName.length() == 0)
 			{
-				roleName = roleName.trim();
-				if (roleName.length() == 0)
-				{
-					continue;
-				}
-				Set<String> permissionSet = createPermissionSet(roleName);
-				roleMap.put(roleName, (permissionSet.size() > 0)?permissionSet:defaultPermissionSet);
-				
+				continue;
 			}
-			return roleMap;
+			Set<String> permissionSet = createPermissionSet(configPrefix, roleName);
+			roleMap.put(roleName, (permissionSet.size() > 0)?permissionSet:defaultPermissionSet);
+
 		}
+		return roleMap;
 	}
 	
-	private Set<String> createPermissionSet(String roleName)
+	private Set<String> createPermissionSet(String config, String roleName)
 	{
-		String permissionList = org.sakaiproject.component.cover.ServerConfigurationService.getString("realm.allowed."+roleName,"");
+		String permissionList = org.sakaiproject.component.cover.ServerConfigurationService.getString(config +roleName,"");
 		Set<String> permissionSet = new HashSet<String>();
 		for (String permissionName : permissionList.split(","))
 		{
@@ -621,25 +617,25 @@ public class PermissionsHelperAction extends VelocityPortletPaneledAction
 		List abilities = (List) state.getAttribute(STATE_ABILITIES);
 		List roles = (List) state.getAttribute(STATE_ROLES);
 
-		Map<String, Set<String>> allowedRoles = getAllowedPermissions();
+		PermissionLimiter limiter = getPermissionLimiter();
 		// look for each role's ability field
 		for (Iterator iRoles = roles.iterator(); iRoles.hasNext();)
 		{
 			Role role = (Role) iRoles.next();
-			Set<String> allowedPermissions = allowedRoles.get(role.getId());
 
 
 			for (Iterator iLocks = abilities.iterator(); iLocks.hasNext();)
 			{
 				String lock = (String) iLocks.next();
-				// Don't alow changes to some permissions.
-				if (allowedPermissions != null && !allowedPermissions.contains(lock))
+				boolean checked = (data.getParameters().getString(role.getId() + lock) != null);
+
+				// Don't allow changes to some permissions.
+				if ( !(limiter.isEnabled(role.getId(), lock, role.isAllowed(lock))) )
 				{
-				    M_log.debug("Can't change permission '"+ lock+ "' on role '"+role.getId()+ "'.");
-				    continue;
+					M_log.debug("Can't change permission '"+ lock+ "' on role '"+role.getId()+ "'.");
+					continue;
 				}
-				String checked = data.getParameters().getString(role.getId() + lock);
-				if (checked != null)
+				if (checked)
 				{
 					// we have an ability! Make sure there's a role
 					Role myRole = edit.getRole(role.getId());
@@ -668,6 +664,62 @@ public class PermissionsHelperAction extends VelocityPortletPaneledAction
 					}
 				}
 			}
+		}
+	}
+
+	public PermissionLimiter getPermissionLimiter() {
+		Map allowedPermissions = getPermissions("realm.allowed."); // Whitelisted permissions for some roles
+		Map frozenPermissions = getPermissions("realm.frozen."); // Permissions that can't be changed
+		Map addOnlyPermissions = getPermissions("realm.add.only."); // Permissions that can only be added.	}
+		return new PermissionLimiter(allowedPermissions, frozenPermissions, addOnlyPermissions);
+	}
+
+	/**
+	 * The class is put into the velocity context to limit the permission that can be set.
+	 */
+	public static class PermissionLimiter
+	{
+		private Map<String, Set<String>> allowedPermissions;
+		private Map<String, Set<String>> frozenPermissions;
+		private Map<String, Set<String>> addOnlyPermissions;
+
+		/**
+		 * Create a permission limiter. This is put into the velocity context to remove complex logic from the template.
+		 *
+		 * @param allowedPermissions A complete set of permissions for a role. If the role exists in this map but the
+		 *                           permission isn't present the user can't set it.
+		 * @param frozenPermissions A set of permissions that can't be changed for each role.
+		 * @param addOnlyPermissions A set of permissions which the user can only grant and can't take away.
+		 */
+		public PermissionLimiter(Map<String, Set<String>> allowedPermissions, Map<String, Set<String>> frozenPermissions,
+								 Map<String, Set<String>> addOnlyPermissions)
+		{
+			this.allowedPermissions = allowedPermissions;
+			this.frozenPermissions = frozenPermissions;
+			this.addOnlyPermissions = addOnlyPermissions;
+		}
+
+		public boolean isEnabled(String roleId, String permission, boolean enabled)
+		{
+			// Sysadmin doesn't have any restrictions
+			if (SecurityService.isSuperUser()) {
+				return true;
+			}
+			if (frozenPermissions.containsKey(roleId)) {
+				if ( frozenPermissions.get(roleId).contains(permission) ) {
+					return false;
+				}
+			}
+			// Only check when permission is enabled.
+			if (enabled && addOnlyPermissions.containsKey(roleId)) {
+				if ( addOnlyPermissions.get(roleId).contains(permission) ) {
+					return false;
+				}
+			}
+			if (allowedPermissions.containsKey(roleId)) {
+				return allowedPermissions.get(roleId).contains(permission);
+			}
+			return true;
 		}
 	}
 
