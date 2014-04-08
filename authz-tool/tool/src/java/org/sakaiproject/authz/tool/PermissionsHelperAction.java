@@ -184,8 +184,15 @@ public class PermissionsHelperAction extends VelocityPortletPaneledAction
 		String prefix = (String) toolSession.getAttribute(PermissionsHelper.PREFIX);
 		String targetRef = (String) toolSession.getAttribute(PermissionsHelper.TARGET_REF);
 		String description = (String) toolSession.getAttribute(PermissionsHelper.DESCRIPTION);
-		String rolesRef = (String) toolSession.getAttribute(PermissionsHelper.ROLES_REF);
+		Object rolesRef = toolSession.getAttribute(PermissionsHelper.ROLES_REF);
 		if (rolesRef == null) rolesRef = targetRef;
+
+		Collection<String> rolesRefs;
+		if (rolesRef instanceof Collection) {
+			rolesRefs = (Collection<String>) rolesRef;
+		} else {
+			rolesRefs = Collections.singletonList((String) rolesRef);
+		}
 
 		toolSession.setAttribute(STARTED, Boolean.valueOf(true));
 
