@@ -322,6 +322,9 @@ public class PermissionsHelperAction extends VelocityPortletPaneledAction
 			viewEdit = (AuthzGroup) state.getAttribute(STATE_VIEW_REALM_EDIT);
 			if (viewEdit == null)
 			{
+				// I have no idea why this step is performed since we should never edit the template realm, so let's not be too serious about it
+				String realmRolesId = realmRolesIds.iterator().next();
+
 				if (AuthzGroupService.allowUpdate(realmRolesId) || AuthzGroupService.allowUpdate(SiteService.siteReference(siteId)))
 				{
 					try
