@@ -411,23 +411,28 @@ public class PermissionsHelperAction extends VelocityPortletPaneledAction
 
 		// the list of roles
 		List roles = (List) state.getAttribute(STATE_ROLES);
-		if (roles == null)
+		if (roles == null && realmRolesIds != null)
 		{
 			// get the roles from the edit, unless another is specified
 			AuthzGroup roleRealm = viewEdit != null ? viewEdit : edit;
-			if (realmRolesId != null)
+			Collection<Role> rolesUnique = new HashSet<Role>();
+			for (String realmRoleId : realmRolesIds)
 			{
-				try
+				if (realmRoleId != null)
 				{
-					roleRealm = AuthzGroupService.getAuthzGroup(realmRolesId);
+					try
+					{
+						roleRealm = AuthzGroupService.getAuthzGroup(realmRoleId);
+					}
+					catch (Exception e)
+					{
+						M_log.warn("PermissionsHelperAction.buildHelperContext: getRolesRealm: " + realmRoleId + " : " + e);
+					}
 				}
-				catch (Exception e)
-				{
-					M_log.warn("PermissionsHelperAction.buildHelperContext: getRolesRealm: " + realmRolesId + " : " + e);
-				}
+
+				rolesUnique.addAll(roleRealm.getRoles());
 			}
-			roles = new Vector();
-			roles.addAll(roleRealm.getRoles());
+			roles = new Vector(rolesUnique);
 			Collections.sort(roles);
 			state.setAttribute(STATE_ROLES, roles);
 		}
