@@ -20,5 +20,6 @@
   </scm>
   <modules>
     <module>authz-tool/tool</module>
+    <module>devolved-admin/tool</module>
   </modules>
 </project>
