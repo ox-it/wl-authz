@@ -27,7 +27,7 @@
 					<label for="groupSelection">
 					$thelp.getString("per.lis.selectgrp")
 					</label>
-					<select id="authzGroupSelection" name="authzGroupSelection" onchange="javascript:blur();document.getElementById('option').value='changeView';document.viewForm.submit();return false;">
+					<select id="authzGroupSelection" name="authzGroupSelection" onchange="document.viewForm.submit();">
 						<option value ="$siteRef" #if ($!viewRealmIds.contains($!siteId)) selected = "selected" #end>$thelp.getString("per.lis.site")</option>
 
 						## for each group
